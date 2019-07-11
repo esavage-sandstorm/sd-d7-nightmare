@@ -32,8 +32,8 @@ const Nightmare = require('nightmare');
 const nightmare = Nightmare({ show: true });
 ~~~~
 4. Pass D7 functions into nightmare
-I've tried this the other way around (passing nightmare into D7) but this way things stay nicely chained.
-Use a `wait()` between functions to keep things from getting out of hand (this might not be necessary)
+  I've tried this the other way around (passing nightmare into D7) but this way things stay nicely chained.
+  Use a `wait()` between functions to keep things from getting out of hand (this might not be necessary)
 ~~~~
 nightmare
   .use(D7.Login())
