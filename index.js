@@ -146,97 +146,62 @@ function Drupal(config) {
       });
     }
   }
-        //
+  Drupal.checkForUpdates = function(){
+    return function(nightmare){
+      nightmare.goto(config.url+'/admin/reports/updates')///check?destination=admin/reports/updates');
+      .wait('.update.checked')
+      .evaluate(() => {
 
-  // Drupal.checkForUpdates = function(){
-  //   return function(nightmare){
-  //     describe('Check for updates', function(){
-  //       this.timeout('60s');
-  //       Drupal.goToPage(nightmare, '/admin/reports/updates');///check?destination=admin/reports/updates');
+        const parseV = function(v){
+          if (v.indexOf('7.x-') > -1) {
+            v = v.replace('7.x-','');
+          }
+          return parseFloat(v);
+        }
+        const updates = {};
 
-  //       let updates = null;
-
-  //       it('Gather updates', function*(){
-  //         updates = yield nightmare
-  //         .wait('.update.checked')
-  //         .evaluate(() =>{
-
-  //           const parseV = function(v){
-  //             if (v.indexOf('7.x-') > -1) {
-  //               v = v.replace('7.x-','');
-  //             }
-  //             return parseFloat(v);
-  //           }
-
-  //           // const parseUpdateRow = function(row){
-  //           //   let update = {};
-  //           //   if (row.querySelector('.project')){
-  //           //     update.project = row.querySelector('.project a').innerText;
-  //           //     update.current = row.querySelector('.project').innerText.replace(update.project, '');
-  //           //   }
-  //           //   if (row.querySelector('.version-details a')){
-  //           //     update.recommended = row.querySelector('.version-details a').innerText;
-  //           //   }else if (row.querySelector('.version-details')){
-  //           //     update.recommended = row.querySelector('.version-details').innerText;
-  //           //   }
-  //           //   if(update.project){
-  //           //     update.project = update.project.trim();
-  //           //   }
-  //           //   if (update.current){
-  //           //     update.current = parseV(update.current);
-  //           //   }
-  //           //   if (update.recommended){
-  //           //     update.recommended = parseV(update.recommended);
-  //           //   }
-  //           //   return update;
-  //           // }
-  //           const updates = {};
-  //           updates.security = [];
-  //           updates.outdated = [];
-  //           securityRows = Array.from(document.querySelectorAll('table.update tr.error'));
-  //           securityRows.forEach(row => {
-  //             let update = {};
-  //             if (row.querySelector('.project')){
-  //               update.project = row.querySelector('.project a').innerText;
-  //               update.current = row.querySelector('.project').innerText.replace(update.project, '');
-  //             }
-  //             if (row.querySelector('.version-details a')){
-  //               update.recommended = row.querySelector('.version-details a').innerText;
-  //             }else if (row.querySelector('.version-details')){
-  //               update.recommended = row.querySelector('.version-details').innerText;
-  //             }
-  //             update.project = update.project.trim();
-  //             update.current = parseV(update.current);
-  //             update.recommended = parseV(update.recommended);
-  //             updates.security.push(update);
-  //           });
-  //           updateRows = Array.from(document.querySelectorAll('table.update .warning'));
-  //           updateRows.forEach(row => {
-  //             let update = {};
-  //             update.project = row.querySelector('.project a').innerText;
-  //             update.current = row.querySelector('.project').innerText.replace(update.project, '');
-  //             // cleanup data
-  //             update.project = update.project.trim();
-  //             update.current = parseV(update.current);
-  //             updates.outdated.push(update);
-  //           });
-  //           return updates;
-  //         });
-  //       });
-
-  //       it('no security updates available', function*(){
-  //         const n = updates.security.length;
-  //         console.log(updates);
-  //         expect(n).to.equal(0);
-  //       });
-  //       // it('Core is up to date', function*(){
-  //       //   const coreV = yield nightmare
-  //       //     .wait('update checked');
-  //       // })
-  //     })
-  //     return nightmare;
-  //   }
-  // }
+        // get core
+        updates.core = {};
+        const coreTable = document.querySelector('table.update'); // its the first one
+        const project = coreTable.querySelector('.project');
+        updates.core.project = project.querySelector('a').innerText;
+        updates.core.current = parseFloat(project.innerText.replace(updates.core.project,''));
+        if (coreTable.querySelector('.version-details a')){
+          updates.core.latest = parseFloat(coreTable.querySelector('.version-details a').innerText);
+          }else {
+            updates.core.latest = updates.core.current;
+          }
+        updates.core.status = coreTable.querySelector('.version-status span').className;
+        // Security Updates
+        updates.security = [];
+        const securityRows = Array.from(document.querySelectorAll('.update tr.error'));
+        securityRows.forEach(row => {
+          const update = {};
+          update.project = row.querySelector('.project a').innerText;
+          update.current = parseV(row.querySelector('.project').innerText.replace(update.project,''));
+          update.latest = parseV(row.querySelector('.version-details a').innerText);
+          update.status = 'security';
+          if (update.project != 'Drupal core'){
+            updates.security.push(update);
+          }
+        })
+        // Regular updates
+        updates.outdated = [];
+        const outdatedRows = Array.from(document.querySelectorAll('.update tr.warning'));
+        outdatedRows.forEach(row => {
+          const update = {};
+          update.project = row.querySelector('.project a').innerText;
+          update.current = parseV(row.querySelector('.project').innerText.replace(update.project,''));
+          update.latest = parseV(row.querySelector('.version-details a').innerText);
+          update.status = 'outdated';
+          if (update.project != 'Drupal core'){
+            updates.outdated.push(update);
+          }
+        })
+        return updates;
+      });
+    }
+  }
 
   // Drupal.getMessages = function(){
   //   return function(Nightmare) {
