@@ -11,124 +11,232 @@ const expect = chai.expect;
 const assert = chai.assert;
 const fs = require('fs');
 
+
+
 function Drupal(config) {
   let Drupal = this;
-  /**
-  * Logs the Nightmare instance out of Drupal
-  **/
-  // Drupal.Logout = function(){
-  //   describe('Log out of Drupal', function() {
-  //     this.timeout('60s');
-  //     it ('User is logged out', function*(){
-  //       var bodyClass = yield Nightmare
-  //       .goto(options.URL+'/user/logout')
-  //       .wait('.footer')
-  //       .evaluate(()=>{
-  //         return document.body.className.toString();
-  //       });
 
-  //       expect(bodyClass).to.contain('not-logged-in');
-  //     });
-  //   });
-  // }
-  // /**
-  // * Log in to to Drupal using the credentials in the .env folder.
-  // **/
-  Drupal.goToPage = function(nightmare, request){
-    let url = config.url;
-    if (request[0] == '/'){
-      url +=request;
-    } else {
-      url += '/' + request;
+
+  Drupal.goToPage = function(request){
+    return function(nightmare){
+      let url = config.url;
+      if (request[0] == '/'){
+        url += request;
+      } else {
+        url += '/' + request;
+      }
+      it('Go to '+url, function*(){
+        this.timeout('10s');
+        let response = yield nightmare
+          .goto(url);
+        expect(response.code).to.equal(200, 'Invalid response: '+response.code);
+      });
     }
-    return it('Go to '+url, function*(){
-      this.timeout('10s');
-      let response = yield nightmare
-      .goto(url);
-      expect(response.code).to.equal(200, 'Invalid response: '+response.code);
-    });
   }
+
   Drupal.Login = function(){
     return function(nightmare){
       const loginPage = (config.login) ? config.login : '/user';
-      describe('Log in to Drupal', function() {
-        this.timeout('240s');
-        Drupal.goToPage(nightmare, loginPage);
 
-        it('Does not have CAPTCHA', function*(){
-          const captcha = yield nightmare
-            .evaluate(() => {
-              return Array.from(document.querySelectorAll('#user-login .g-recaptcha')).length;
-            })
-          expect(captcha, 'CAPTCHA exists; please disable it').to.equal(0);
-        });
+      nightmare.use(Drupal.goToPage(loginPage));
+      it('Does not have CAPTCHA', function*(){
+        const captcha = yield nightmare
+          .evaluate(() => {
+            return Array.from(document.querySelectorAll('#user-login .g-recaptcha')).length;
+          })
+        expect(captcha, 'CAPTCHA exists; please disable it').to.equal(0);
+      });
 
-        it('Log in as '+config.username, function*() {
-          var loggedInUser = yield nightmare
-            .insert('#edit-name', config.username)
-            .insert('#edit-pass', config.password)
-            .click('#edit-submit')
-            .wait('body.logged-in')
-            .wait('.admin-menu-account')
-            .evaluate(() => {
-              return document.querySelector('.admin-menu-account a strong').innerText.toLowerCase();
-            });
-          expect(loggedInUser).to.equal(config.username.toLowerCase());
-        });
+      it('Log in as '+config.username, function*() {
+        var loggedInUser = yield nightmare
+          .insert('#edit-name', config.username)
+          .insert('#edit-pass', config.password)
+          .click('#edit-submit')
+          .wait('body.logged-in')
+          .wait('.admin-menu-account')
+          .evaluate(() => {
+            return document.querySelector('.admin-menu-account a strong').innerText.toLowerCase();
+          });
+        expect(loggedInUser).to.equal(config.username.toLowerCase());
       });
     }
-  }
-  Drupal.Home = function(nightmare){
-    describe('Go to the home page', function(){
-      Drupal.goToPage(nightmare,'/');
-    })
   }
 
   Drupal.statusReport = function(){
-    return function(nightmare) {
-      describe('Check the status page', function(){
-        Drupal.goToPage(nightmare, '/admin/reports/status');
 
-        let statusReport = null;
-        it('Gathering report', function*(){
-          statusReport = yield nightmare
-            .evaluate(() => {
-              const report = [];
-              const rows = Array.from(document.querySelectorAll('.system-status-report tr'));
-              rows.forEach(row => {
-                let item = {};
-                item.type = row.className.replace('merge-up','').replace('merge-down','').trim();
-                if (row.querySelector('.status-title')) {
-                  item.title = row.querySelector('.status-title').innerText.trim();
-                }
-                if (row.querySelector('.status-value')) {
-                  item.value = row.querySelector('.status-value').innerText.trim();
-                }
-                report.push(item);
-              });
-              return report;
-            });
+    return function(nightmare) {
+      nightmare
+        .evaluate(() => {
+          const report = [];
+          const rows = Array.from(document.querySelectorAll('.system-status-report tr'));
+          rows.forEach(row => {
+            let item = {};
+            item.type = row.className.replace('merge-up','').replace('merge-down','').trim();
+            if (row.querySelector('.status-title')) {
+              item.title = row.querySelector('.status-title').innerText.trim();
+            }
+            if (row.querySelector('.status-value')) {
+              item.value = row.querySelector('.status-value').innerText.trim();
+            }
+            report.push(item);
           });
-          function getReportItemByTitle(title){
-            return statusReport.filter(item => {
-              return item.title == title;
-            })[0];
+          return report;
+        });
+      // end nightmare
+    }
+  };
+
+  Drupal.logs = function(type, severity){
+    // translate from text to code
+    switch (severity){
+      case 'emergency':
+        severity = 0;
+        break;
+      case 'alert':
+        severity = 1;
+        break;
+      case 'critical':
+        severity = 2;
+        break;
+      case 'error':
+        severity = 3;
+        break;
+      case 'warn':
+      case 'warning':
+        severity = 4;
+        break;
+      case 'notice':
+        severity = 5;
+        break;
+      case 'info':
+        severity = 6;
+        break;
+      case 'debug':
+        severity = 7;
+        break;
+    }
+    return function(nightmare) {
+      nightmare.goto(config.url+'/admin/reports/dblog')
+      .wait('#edit-filters .fieldset-title')
+      .click('#edit-filters .fieldset-title')
+      .select('#edit-filters #edit-type', type)
+      .select('#edit-filters #edit-severity', severity)
+      .click('#edit-filters #edit-submit')
+      .wait('#admin-dblog')
+      .wait(2000)
+      .evaluate(()=> {
+        const messages = [];
+        let rows = Array.from(document.querySelectorAll('#admin-dblog tbody tr'));
+        if (rows[0].innerText == 'No log messages available.'){
+          return messages;
+        }
+        rows.forEach(row => {
+          const cells = Array.from(row.querySelectorAll('td'));
+          const message = {};
+          if (cells.length > 0){
+            message.type = cells[1].innerText;
+            message.date = cells[2].innerText;
+            message.text = cells[3].innerText;
+            message.link = cells[3].querySelector('a').href;
+            message.user = cells[4].innerText;
+            messages.push(message);
           }
-          it('Access to update.php is PROTECTED', function*(){
-            const status = getReportItemByTitle('Access to update.php').value;
-            expect(status).to.equal('Protected');
-          });
-          it('Configuration file is PROTECTED', function*(){
-            const status = getReportItemByTitle('Configuration file').value;
-            expect(status).to.equal('Protected');
-          });
+        });
+        return messages;
       });
     }
   }
+        //
 
+  // Drupal.checkForUpdates = function(){
+  //   return function(nightmare){
+  //     describe('Check for updates', function(){
+  //       this.timeout('60s');
+  //       Drupal.goToPage(nightmare, '/admin/reports/updates');///check?destination=admin/reports/updates');
 
+  //       let updates = null;
 
+  //       it('Gather updates', function*(){
+  //         updates = yield nightmare
+  //         .wait('.update.checked')
+  //         .evaluate(() =>{
 
+  //           const parseV = function(v){
+  //             if (v.indexOf('7.x-') > -1) {
+  //               v = v.replace('7.x-','');
+  //             }
+  //             return parseFloat(v);
+  //           }
+
+  //           // const parseUpdateRow = function(row){
+  //           //   let update = {};
+  //           //   if (row.querySelector('.project')){
+  //           //     update.project = row.querySelector('.project a').innerText;
+  //           //     update.current = row.querySelector('.project').innerText.replace(update.project, '');
+  //           //   }
+  //           //   if (row.querySelector('.version-details a')){
+  //           //     update.recommended = row.querySelector('.version-details a').innerText;
+  //           //   }else if (row.querySelector('.version-details')){
+  //           //     update.recommended = row.querySelector('.version-details').innerText;
+  //           //   }
+  //           //   if(update.project){
+  //           //     update.project = update.project.trim();
+  //           //   }
+  //           //   if (update.current){
+  //           //     update.current = parseV(update.current);
+  //           //   }
+  //           //   if (update.recommended){
+  //           //     update.recommended = parseV(update.recommended);
+  //           //   }
+  //           //   return update;
+  //           // }
+  //           const updates = {};
+  //           updates.security = [];
+  //           updates.outdated = [];
+  //           securityRows = Array.from(document.querySelectorAll('table.update tr.error'));
+  //           securityRows.forEach(row => {
+  //             let update = {};
+  //             if (row.querySelector('.project')){
+  //               update.project = row.querySelector('.project a').innerText;
+  //               update.current = row.querySelector('.project').innerText.replace(update.project, '');
+  //             }
+  //             if (row.querySelector('.version-details a')){
+  //               update.recommended = row.querySelector('.version-details a').innerText;
+  //             }else if (row.querySelector('.version-details')){
+  //               update.recommended = row.querySelector('.version-details').innerText;
+  //             }
+  //             update.project = update.project.trim();
+  //             update.current = parseV(update.current);
+  //             update.recommended = parseV(update.recommended);
+  //             updates.security.push(update);
+  //           });
+  //           updateRows = Array.from(document.querySelectorAll('table.update .warning'));
+  //           updateRows.forEach(row => {
+  //             let update = {};
+  //             update.project = row.querySelector('.project a').innerText;
+  //             update.current = row.querySelector('.project').innerText.replace(update.project, '');
+  //             // cleanup data
+  //             update.project = update.project.trim();
+  //             update.current = parseV(update.current);
+  //             updates.outdated.push(update);
+  //           });
+  //           return updates;
+  //         });
+  //       });
+
+  //       it('no security updates available', function*(){
+  //         const n = updates.security.length;
+  //         console.log(updates);
+  //         expect(n).to.equal(0);
+  //       });
+  //       // it('Core is up to date', function*(){
+  //       //   const coreV = yield nightmare
+  //       //     .wait('update checked');
+  //       // })
+  //     })
+  //     return nightmare;
+  //   }
+  // }
 
   // Drupal.getMessages = function(){
   //   return function(Nightmare) {
