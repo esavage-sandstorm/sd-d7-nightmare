@@ -1,10 +1,9 @@
-'use strict';
 
 module.exports = Drupal;
 
 require('mocha-generators').install();
 
-var chai = require('chai');
+const chai = require('chai');
 chai.config.includeStack = false;
 const should = chai.should();
 const expect = chai.expect;
@@ -25,12 +24,7 @@ function Drupal(config) {
       } else {
         url += '/' + request;
       }
-      it('Go to '+url, function*(){
-        this.timeout('10s');
-        let response = yield nightmare
-          .goto(url);
-        expect(response.code).to.equal(200, 'Invalid response: '+response.code);
-      });
+      nightmare.goto(url);
     }
   }
 
@@ -38,7 +32,13 @@ function Drupal(config) {
     return function(nightmare){
       const loginPage = (config.login) ? config.login : '/user';
 
-      nightmare.use(Drupal.goToPage(loginPage));
+      it('Go to '+loginPage, function*(){
+        this.timeout('10s');
+        let response = yield nightmare
+          .use(Drupal.goToPage(loginPage));
+        expect(response.code).to.equal(200, 'Invalid response: '+response.code);
+      });
+
       it('Does not have CAPTCHA', function*(){
         const captcha = yield nightmare
           .evaluate(() => {
@@ -85,6 +85,76 @@ function Drupal(config) {
       // end nightmare
     }
   };
+
+  Drupal.addMenuItem = function(menuId, item){
+    const menuAdmin = 'admin/structure/menu/manage/'+ menuId+'/add';
+    return function(nightmare){
+      it('Go to Menu admin', function*(){
+        this.timeout('100s');
+        let response = yield nightmare
+          .use(Drupal.goToPage(menuAdmin))
+        expect(response.code).to.equal(200, 'Invalid response: '+response.code);
+      });
+      it('Create menu item', function*(){
+        this.timeout('10s');
+        let message = yield nightmare
+          .insert('#edit-link-title', item.title)
+          .insert('#edit-link-path', item.path)
+          .evaluate(parent => {
+            const options = Array.from(document.querySelectorAll('#edit-parent option'));
+            const theOption = options.filter(opt => {
+              return opt.text.indexOf(parent) > -1;
+            });
+            if (theOption.length > 0){
+              theOption[0].setAttribute('selected', 'selected');
+            }
+          }, item.parent)
+          .select('#edit-weight', item.weight)
+          // set checkbox true / false (todo move this to function)
+          .evaluate(enabled => {
+            const check = document.querySelector('#edit-enabled');
+            if (enabled){
+              check.setAttribute('checked', 'checked');
+            } else {
+              check.removeAttribute('checked');
+            }
+          }, item.enabled = true)
+          .evaluate(expanded => {
+            const check = document.querySelector('#edit-expanded');
+            if (expanded){
+              check.setAttribute('checked', 'checked');
+            } else {
+              check.removeAttribute('checked');
+            }
+          }, item.expanded = false)
+          .click('#edit-xmlsitemap .fieldset-title')
+          .wait(1000)
+          .select('#edit-xmlsitemap-status', item.siteMapInclusion)
+          .select('#edit-xmlsitemap-priority', item.siteMapPriority)
+          .click('#edit-options-attributes .fieldset-title')
+          .wait(1000)
+          .insert('#edit-options-attributes-title', item.menuLink.title)
+          .insert('#edit-options-attributes-id', item.menuLink.id)
+          .insert('#edit-options-attributes-name', item.menuLink.name)
+          .insert('#edit-options-attributes-rel', item.menuLink.relationship)
+          .insert('#edit-options-attributes-class', item.menuLink.classes)
+          .insert('#edit-options-attributes-style', item.menuLink.style)
+          .select('#edit-options-attributes-target', item.menuLink.target)
+          .insert('#edit-options-attributes-accesskey', item.menuLink.accessKey)
+          .click('#edit-options-item-attributes .fieldset-title')
+          .wait(1000)
+          .insert('#edit-options-item-attributes-id', item.menuItem.id)
+          .insert('#edit-options-item-attributes-class', item.menuItem.classes)
+          .insert('#edit-options-item-attributes-style', item.menuItem.style)
+          .click('#edit-submit')
+          .wait('.messages')
+          .evaluate(() => {
+            return document.querySelector('.messages').innerText;
+          })
+          expect(message).to.contain('Your configuration has been saved.');
+      });
+    }
+  }
 
   Drupal.logs = function(type, severity){
     // translate from text to code
@@ -152,12 +222,6 @@ function Drupal(config) {
       .wait('.update.checked')
       .evaluate(() => {
 
-        const parseV = function(v){
-          if (v.indexOf('7.x-') > -1) {
-            v = v.replace('7.x-','');
-          }
-          return parseFloat(v);
-        }
         const updates = {};
 
         // get core
@@ -178,8 +242,8 @@ function Drupal(config) {
         securityRows.forEach(row => {
           const update = {};
           update.project = row.querySelector('.project a').innerText;
-          update.current = parseV(row.querySelector('.project').innerText.replace(update.project,''));
-          update.latest = parseV(row.querySelector('.version-details a').innerText);
+          update.current = row.querySelector('.project').innerText.replace(update.project,'');
+          update.latest = row.querySelector('.version-details a').innerText;
           update.status = 'security';
           if (update.project != 'Drupal core'){
             updates.security.push(update);
@@ -191,8 +255,8 @@ function Drupal(config) {
         outdatedRows.forEach(row => {
           const update = {};
           update.project = row.querySelector('.project a').innerText;
-          update.current = parseV(row.querySelector('.project').innerText.replace(update.project,''));
-          update.latest = parseV(row.querySelector('.version-details a').innerText);
+          update.current = row.querySelector('.project').innerText.replace(update.project,'');
+          update.latest = row.querySelector('.version-details a').innerText;
           update.status = 'outdated';
           if (update.project != 'Drupal core'){
             updates.outdated.push(update);
