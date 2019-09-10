@@ -1,0 +1,23 @@
+{
+  "name": "sd-d7-nightmare",
+  "version": "1.0.0",
+  "description": "Drupal 7 functions for NightmareJS",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/esavage-sandstorm/sd-d7-nightmare.git"
+  },
+  "author": "Sandstorm Design | Eric Savage",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/esavage-sandstorm/sd-d7-nightmare/issues"
+  },
+  "homepage": "https://github.com/esavage-sandstorm/sd-d7-nightmare#readme",
+  "dependencies": {
+    "chai": "^4.2.0",
+    "mocha-generators": "^2.0.0"
+  }
+}
